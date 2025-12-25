@@ -14,4 +14,4 @@ if ($LASTEXITCODE -ne 0) {
 
 # Launch the Java application with the required argument
 $env:PATH = "$PSScriptRoot/natives;$env:PATH"
-& $javaCmd --enable-native-access=ALL-UNNAMED -jar "$PSScriptRoot/j2cc-@version@.jar" @args
+& $javaCmd --enable-native-access=ALL-UNNAMED -jar "$PSScriptRoot/core-@version@.jar" @args

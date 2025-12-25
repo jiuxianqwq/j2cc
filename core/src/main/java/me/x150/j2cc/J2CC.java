@@ -514,7 +514,10 @@ public class J2CC {
 		}
 		bootstrapMethodC.beginScope("");
 		bootstrapMethodC.addStatement("jbyte internalUtilBuffer[] = { $l }", Arrays.stream(bytes).mapToObj(String::valueOf).collect(Collectors.joining(", ")));
-		bootstrapMethodC.addStatement("env->DefineClass(nullptr, nullptr, internalUtilBuffer, $l)", internalUtil.length);
+		bootstrapMethodC.local("jclass", "javaLangClass").initStmt("env->GetObjectClass(loaderClazz)");
+		bootstrapMethodC.local("jmethodID", "classGetClassLoader").initStmt("env->GetMethodID(javaLangClass, $s, $s)", "getClassLoader", "()Ljava/lang/ClassLoader;");
+		bootstrapMethodC.local("jobject", "targetLoader").initStmt("env->CallObjectMethod(loaderClazz, classGetClassLoader)");
+		bootstrapMethodC.addStatement("env->DefineClass(nullptr, targetLoader, internalUtilBuffer, $l)", internalUtil.length);
 		bootstrapMethodC.addStatement("initChachaTable(env, key)");
 		bootstrapMethodC.endScope();
 

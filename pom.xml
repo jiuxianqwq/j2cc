@@ -9,7 +9,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <j2cc.version>1.0.8</j2cc.version>
-        <asm.version>9.7.1</asm.version>
+        <asm.version>9.9.1</asm.version>
     </properties>
     <groupId>me.x150.j2cc</groupId>
     <artifactId>j2cc-bom</artifactId>

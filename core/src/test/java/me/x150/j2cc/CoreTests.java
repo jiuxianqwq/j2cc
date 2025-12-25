@@ -23,6 +23,7 @@ import me.x150.j2cc.util.Util;
 import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
@@ -85,6 +86,67 @@ public class CoreTests {
 		} catch (Throwable t) {
 			throw new ExceptionInInitializerError(t);
 		}
+	}
+
+	@SneakyThrows
+	@Test
+	public void internalUtilDefineClassUsesLoaderClassLoader() {
+		Path testDir = Files.createTempDirectory(tempDir, "internalUtilDefineClassLoader");
+		byte[] cf = compileJavaSource(testDir, "Hello", "public class Hello { public static void main(String[] args) {} }");
+		if (cf == null) throw new IllegalStateException("Could not compile");
+
+		ClassReader cr = new ClassReader(cf);
+		ClassNode cn = new ClassNode();
+		cr.accept(cn, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+		String name = cn.name;
+		String strippedName = name.substring(name.lastIndexOf('/') + 1);
+
+		Path sourceDir = testDir.resolve("transpilerSource");
+		Path outPath = testDir.resolve("transpilerOutput");
+		Files.createDirectories(sourceDir);
+		Files.createDirectories(outPath);
+
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+		cn.accept(cw);
+		Files.write(sourceDir.resolve(strippedName + ".class"), cw.toByteArray());
+
+		InputProvider prov = new DirectoryInputProvider(sourceDir);
+		OutputSink sink = new DirectoryOutputSink(outPath);
+		Workspace wsp = new Workspace(new UnionResolver(
+				prov.toResolver(),
+				Resolver.stdlibResolver()
+		));
+		Context context = Context.builder()
+				.workspace(wsp)
+				.specialTempPath(testDir)
+				.utilPath(Path.of("util").toAbsolutePath().normalize())
+				.keepTemp(true)
+				.input(prov)
+				.output(sink)
+				.pJobs(1)
+				.skipOptimization(true)
+				.debug(new Configuration.DebugSettings())
+				.obfuscationSettings(new Context.ObfuscationSettings(new Configuration.RenamerSettings(), false, new Configuration.AntiHookSettings()))
+				.compiler(new DefaultCompiler())
+				.customTarget(Util.getTargetTripleForCurrentOs())
+				.extraClassFilters(List.of())
+				.extraMemberFilters(List.of())
+				.build();
+		J2CC.doObfuscate(context, ZIG_COMPILER, new Obfuscator());
+
+		Path compilationDir;
+		try (Stream<Path> list = Files.list(testDir)) {
+			compilationDir = list
+					.filter(Files::isDirectory)
+					.filter(it -> it.getFileName().toString().startsWith("j2cc-compilation"))
+					.findFirst()
+					.orElseThrow();
+		}
+		String mainCpp = Files.readString(compilationDir.resolve("main.cpp"));
+		Assertions.assertTrue(
+				mainCpp.contains("DefineClass(nullptr, targetLoader, internalUtilBuffer"),
+				mainCpp
+		);
 	}
 
 	private static void appendQuoted(StringBuilder to, StringBuilder from) {
