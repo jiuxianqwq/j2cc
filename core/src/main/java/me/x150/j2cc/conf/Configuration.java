@@ -141,6 +141,9 @@ public class Configuration extends DTOConfigurable {
 		@ConfigValue(value = "internalClassPackageName", description = "Package name of the internal classes Loader and Platform, independent of enabled")
 		String internalClassesPackageName = "j2cc/internal";
 
+		@ConfigValue(value = "internalResourcePackageName", description = "Resource directory name used for natives.bin and relocationInfo.dat", exampleContent = "j2cc")
+		String internalResourcePackageName = "j2cc";
+
 		@Getter
 		@FieldDefaults(level = AccessLevel.PUBLIC)
 		public static class FilterSet extends DTOConfigurable {

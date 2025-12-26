@@ -315,12 +315,19 @@ public class J2CC {
 	}
 
 	private static void compileAndWriteNatives(Context context, Compiler zigCompiler, Path tmpDir, List<DefaultCompiler.CSourceFileEntry> sourceFiles, Path utilPath, Path javaHomeInclude, CacheSlotManager indyCache, OutputSink outputSink, StringCollector stringCollector) throws IOException {
+		Configuration.RenamerSettings rs = context.obfuscationSettings().renamerSettings();
+		String resourceRoot = rs == null ? "j2cc" : rs.internalResourcePackageName;
+		if (resourceRoot == null || resourceRoot.isBlank()) resourceRoot = "j2cc";
+		resourceRoot = resourceRoot.replace('.', '/');
+		while (resourceRoot.startsWith("/")) resourceRoot = resourceRoot.substring(1);
+		while (resourceRoot.endsWith("/")) resourceRoot = resourceRoot.substring(0, resourceRoot.length() - 1);
+
 		Path[] postCompileCommands = context.postCompileCommands();
 		List<DefaultCompiler.Target> allTargets = context.customTargets();
 		if (allTargets.isEmpty())
 			throw new CompilationFailure("No targets to build. Add at least one target in the targets array.");
 		ByteArrayOutputStream tempRelocTable = new ByteArrayOutputStream();
-		try (OutputStream nativesFile = outputSink.openFile("j2cc/natives.bin");
+		try (OutputStream nativesFile = outputSink.openFile(resourceRoot + "/natives.bin");
 			 DataOutputStream dos = new DataOutputStream(tempRelocTable)) {
 			long positionCounter = 0L;
 
@@ -410,7 +417,7 @@ public class J2CC {
 				}
 			}
 		}
-		try (OutputStream outputStream = outputSink.openFile("j2cc/relocationInfo.dat")) {
+		try (OutputStream outputStream = outputSink.openFile(resourceRoot + "/relocationInfo.dat")) {
 			outputStream.write(tempRelocTable.toByteArray());
 		}
 	}
@@ -586,7 +593,7 @@ public class J2CC {
 				String[] parts = cn.name.split("/");
 				int to = relativePathP.getNameCount() - parts.length;
 				String namePrefix = to == 0 ? "" : relativePathP.subpath(0, to).toString();
-				if (parts[0].equals("j2cc") && parts[1].equals("internal")) continue;
+				if (cn.name.startsWith("j2cc/internal/")) continue;
 				Workspace.ClassInfo cachedClass = context.workspace().get(relativeName.substring(0, relativeName.length() - ".class".length()));
 				classes.add(new ClassEntry(cachedClass, namePrefix));
 			}
@@ -722,6 +729,15 @@ public class J2CC {
 	}
 
 	private static void transformLoader(Context context, List<ClassNode> loaderClasses) {
+		Configuration.RenamerSettings rs = context.obfuscationSettings().renamerSettings();
+		String resourceRoot = rs == null ? "j2cc" : rs.internalResourcePackageName;
+		if (resourceRoot == null || resourceRoot.isBlank()) resourceRoot = "j2cc";
+		resourceRoot = resourceRoot.replace('.', '/');
+		while (resourceRoot.startsWith("/")) resourceRoot = resourceRoot.substring(1);
+		while (resourceRoot.endsWith("/")) resourceRoot = resourceRoot.substring(0, resourceRoot.length() - 1);
+		String oldPrefix = "j2cc/";
+		String newPrefix = resourceRoot + "/";
+
 		Predicate<AnnotationNode> matchDebugAnnot = it -> it.desc.equals(Type.getDescriptor(Debug.class));
 		List<Pair<ClassNode, MethodNode>> methodsToNuke = new ArrayList<>();
 		List<ClassNode> classesToNuke = new ArrayList<>();
@@ -746,6 +762,10 @@ public class J2CC {
 			for (MethodNode method : loaderClass.methods) {
 				InsnList insns = method.instructions;
 				for (AbstractInsnNode instruction : insns) {
+					if (!newPrefix.equals(oldPrefix) && instruction instanceof LdcInsnNode ldc && ldc.cst instanceof String s && s.startsWith(oldPrefix)) {
+						ldc.cst = newPrefix + s.substring(oldPrefix.length());
+						continue;
+					}
 					if (instruction instanceof MethodInsnNode min &&
 							(
 									methodsToNuke.stream().anyMatch(e -> e.getA().name.equals(min.owner) && e.getB().name.equals(min.name) && e.getB().desc.equals(min.desc))
